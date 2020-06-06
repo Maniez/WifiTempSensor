@@ -7,7 +7,6 @@
 // Defines
 #define DHTPIN 5 
 #define DHTTYPE DHT11
-#define interval 10000
 #define sleepTimeInSeconds 300
 #define measurementsPerInterval 5
 
@@ -24,9 +23,6 @@ volatile float raw_temperatur = 0;
 volatile float raw_humidity = 0;
 
 volatile float voltageOffset = 0.272;
-
-unsigned long previousMillis = 0;
-
 
 // Nodes
 HomieNode MeasurementNode("Measurements", "Measurements", "string");
@@ -57,38 +53,10 @@ void onHomieEvent(const HomieEvent& event) {
       break;
     case HomieEventType::READY_TO_SLEEP:
       Homie.getLogger() << "Ready to sleep" << endl;
-      ESP.deepSleep(sleepTimeInSeconds*1e6, WAKE_RFCAL);
+      ESP.deepSleep(sleepTimeInSeconds*1e6);
       break;
     default:
       break;
-  }
-}
-
-void loopHandler() {
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    // save the last time you updated the DHT values
-    previousMillis = currentMillis;
-    // Read temperature as Celsius (the default)
-    float newT = dht.readTemperature();
-    // if temperature read failed, don't change t value
-    if (isnan(newT)) {
-      Serial.println("Failed to read from DHT sensor!");
-    }
-    else {
-      t = newT;
-      Serial.println(t);
-    }
-    // Read Humidity
-    float newH = dht.readHumidity();
-    // if humidity read failed, don't change h value 
-    if (isnan(newH)) {
-      Serial.println("Failed to read from DHT sensor!");
-    }
-    else {
-      h = newH;
-      Serial.println(h);
-    }
   }
 }
 
@@ -100,9 +68,7 @@ void setup() {
 
     dht.begin();
     pinMode(D2, OUTPUT);
-    digitalWrite(D2, HIGH);
-
-
+    
     Homie_setFirmware("TempSensor", "0.0.1");
     Homie.onEvent(onHomieEvent);
 
@@ -110,7 +76,7 @@ void setup() {
     MeasurementNode.advertise("Humidity").setName("Humidity").setRetained(true).setDatatype("float");
     MeasurementNode.advertise("Voltage").setName("Volt").setRetained(true).setDatatype("float");
 
-    //Homie.setLoopFunction(loopHandler);
+    digitalWrite(D2, HIGH);
 
     Homie.setup();
 }
