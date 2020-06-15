@@ -1,0 +1,23 @@
+{
+    "name": "Temperatur Sensor",
+    "device_id": "tempsensor-2",
+    "device_stats_interval": 60,
+    "wifi": {
+      "ssid": "D-Lan",
+      "password": "K4tM4n!!",
+      "ip": "192.168.1.55",
+      "mask": "255.255.255.0",
+      "gw": "192.168.1.1"
+    },
+    "mqtt": {
+      "host": "192.168.1.26",
+      "port": 1883,
+      "base_topic": "homie/"
+    },
+    "ota": {
+      "enabled": true
+    },
+    "settings": {
+      "percentage": 55
+    }
+  }
