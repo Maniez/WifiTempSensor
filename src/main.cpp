@@ -7,7 +7,7 @@
 // Defines
 #define DHTPIN 5 
 #define DHTTYPE DHT11
-#define sleepTimeInSeconds 300
+#define sleepTimeInSeconds 840
 #define measurementsPerInterval 5
 
 // Settings
@@ -38,11 +38,9 @@ HomieNode MeasurementNode("Measurements", "Measurements", "string");
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
     case HomieEventType::MQTT_READY:
-      Homie.getLogger() << "Send Volate: " << v << endl;
+      
       MeasurementNode.setProperty("Voltage").send(String(v));
-      Homie.getLogger() << "Send Temperatur: " << t << endl;
       MeasurementNode.setProperty("Temperatur").send(String(t));
-      Homie.getLogger() << "Send Humidity: " << h << endl;
       MeasurementNode.setProperty("Humidity").send(String(h));
       Homie.getLogger() << "✔ MQTT is ready, prepare to sleep..." << endl;
       Homie.prepareToSleep();
@@ -62,17 +60,21 @@ void doMeasurement(void) {
   //digitalWrite(D2, HIGH);
   dht.begin();
   delay(100);
-
+  
   // Read five times all values
   for(int i = 0; i < measurementsPerInterval; i++) {
     raw_voltage += ESP.getVcc();
     raw_temperatur += dht.readTemperature();
     raw_humidity += dht.readHumidity();
+    delay(100);
   }
   // Calculate the mean of all values
   v = (raw_voltage/measurementsPerInterval/1000) + voltageOffset;
   t = raw_temperatur/measurementsPerInterval;
   h = raw_humidity/measurementsPerInterval;
+  Serial << "Send Volate: " << v << endl;
+  Serial << "Send Temperatur: " << t << endl;
+  Serial << "Send Humidity: " << h << endl;
 
   //digitalWrite(D2, LOW);
 }
