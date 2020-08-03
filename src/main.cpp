@@ -23,7 +23,7 @@ volatile float raw_temperatur = 0;
 volatile float raw_humidity = 0;
 
 volatile float voltageOffset = -0.13;
-volatile float deltaTemp = 0.5;
+volatile float deltaTemp = 0.3;
 
 // RTC Memory
 struct {
@@ -42,6 +42,7 @@ void onHomieEvent(const HomieEvent& event) {
       MeasurementNode.setProperty("Voltage").send(String(v));
       MeasurementNode.setProperty("Temperatur").send(String(t));
       MeasurementNode.setProperty("Humidity").send(String(h));
+      MeasurementNode.setProperty("Bootcount").send(String(rtcMemory.bootCount));
       Homie.getLogger() << "✔ MQTT is ready, prepare to sleep..." << endl;
       Homie.prepareToSleep();
       break;
@@ -92,7 +93,7 @@ void setup() {
 
   // Init LED and Serial
   Homie.disableLedFeedback();
-  Serial.begin(115200);
+  //Serial.begin(115200);
   Serial << endl << endl;
 
   // Print Wake-Up infos
@@ -136,6 +137,7 @@ void setup() {
   MeasurementNode.advertise("Temperatur").setName("Temp").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Humidity").setName("Humidity").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Voltage").setName("Volt").setRetained(true).setDatatype("float");
+  MeasurementNode.advertise("Bootcount").setName("Bootcount").setRetained(true).setDatatype("float");
 
   Homie.setup();
 }
