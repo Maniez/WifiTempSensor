@@ -4,10 +4,7 @@
     "device_stats_interval": 840,
     "wifi": {
       "ssid": "D-Lan",
-      "password": "K4tM4n!!",
-      "ip": "192.168.1.55",
-      "mask": "255.255.255.0",
-      "gw": "192.168.1.1"
+      "password": "K4tM4n!!"
     },
     "mqtt": {
       "host": "192.168.1.26",
