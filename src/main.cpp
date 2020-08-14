@@ -1,6 +1,6 @@
 #include <Homie.h>
 #include <DHT.h>
-#include <Arduino.h>
+#include <ArduinoOTA.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <Ticker.h>
@@ -11,50 +11,30 @@
 #define MeasurementTimeInSeconds 300
 #define measurementsPerInterval 5
 
-// Settings
-ADC_MODE(ADC_VCC);
-Ticker measurmentTimer;
-
 // Gloabal Variables
 DHT dht(DHTPIN, DHTTYPE);
-volatile float v = 0;
+Ticker measurmentTimer;
+
 volatile float t = 0;
 volatile float h = 0;
-volatile float raw_voltage = 0;
-volatile float raw_temperatur = 0;
-volatile float raw_humidity = 0;
 
-volatile float voltageOffset = -0.13;
-volatile float deltaTemp = 0.3;
-
-bool globalEnableMeasurment = false;
-
-// RTC Memory
-struct {
-  uint32_t bootCount = 0;
-  float temperatur = 0;
-} rtcMemory;
-
+bool globalEnableMeasurment = true;
 
 // Nodes
 HomieNode MeasurementNode("Measurements", "Measurements", "string");
 
 void doMeasurement(void) {
   // Read five times all values
-  v = 0;
   t = 0;
   h = 0;
   for(int i = 0; i < measurementsPerInterval; i++) {
-    v += ESP.getVcc();
     t += dht.readTemperature();
     h += dht.readHumidity();
     delay(100);
   }
   // Calculate the mean of all values
-  v = (v/measurementsPerInterval/1000) + voltageOffset;
   t = t/measurementsPerInterval;
   h = h/measurementsPerInterval;
-  Serial << "Send Volate: " << v << endl;
   Serial << "Send Temperatur: " << t << endl;
   Serial << "Send Humidity: " << h << endl;
 }
@@ -69,18 +49,8 @@ void mainHomieLoop(void) {
     Serial << "Do Measurement" << endl;
     doMeasurement();
 
-    Serial << "Decide wheather return or send data" << endl;
-    if(abs((rtcMemory.temperatur - t)) < deltaTemp) {
-      Serial << "Temperatur difference is to small, return" << endl;
-      globalEnableMeasurment = false;
-      return;
-    } 
-
-    MeasurementNode.setProperty("Voltage").send(String(v));
     MeasurementNode.setProperty("Temperatur").send(String(t));
     MeasurementNode.setProperty("Humidity").send(String(h));
-
-    rtcMemory.temperatur = t;
 
     globalEnableMeasurment = false;
   }
@@ -91,19 +61,37 @@ void setup() {
   Serial << endl << endl;
 
   // Start Homie  
-  Homie_setFirmware("TempSensor", "0.1.0");
+  Homie_setFirmware("TempSensor", "0.2.0");
   Homie.setLoopFunction(mainHomieLoop);
   measurmentTimer.attach(MeasurementTimeInSeconds, enableMeasurment);
   dht.begin();
 
   MeasurementNode.advertise("Temperatur").setName("Temp").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Humidity").setName("Humidity").setRetained(true).setDatatype("float");
-  MeasurementNode.advertise("Voltage").setName("Volt").setRetained(true).setDatatype("float");
 
   Homie.setup();
+  ArduinoOTA.onStart([]() {
+  Serial.println("Start");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+  ArduinoOTA.begin(); 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  ArduinoOTA.handle();
   Homie.loop();
 }
