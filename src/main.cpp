@@ -33,8 +33,10 @@ RemoteDebug Debug;
 
 uint32_t mqtt_lost_counter = 0;
 uint32_t mqtt_lost_reason[10] = {0};
+uint32_t mqtt_lost_time[10] = {0};
 uint32_t wifi_lost_counter = 0;
 uint32_t wifi_lost_reason[10] = {0};
+uint32_t wifi_lost_time[10] = {0};
 #endif
 
 // Nodes
@@ -86,12 +88,12 @@ void processCmdRemoteDebug() {
 		// Print Debug variables
     debugD("Wifi disconnected %d times", wifi_lost_counter);
     for(uint32_t i = 0; (i < wifi_lost_counter) && (i < 10); i++) {
-      debugD("Wifi disconnected reason for disconnect %d was: %d", i, wifi_lost_reason[i]);
+      debugD("Wifi disconnected reason for disconnect %d was: %d at time %d", i+1, wifi_lost_reason[i], wifi_lost_time[i]);
     }
 
     debugD("MQTT disconnected %d times", mqtt_lost_counter);
     for(uint32_t i = 0; (i < mqtt_lost_counter) && (i < 10); i++) {
-      debugD("MQTT disconnected reason for disconnect %d was: %d", i, mqtt_lost_reason[i]);
+      debugD("MQTT disconnected reason for disconnect %d was: %d at time %d", i+1, mqtt_lost_reason[i], mqtt_lost_time[i]);
     }
 
 
@@ -158,8 +160,10 @@ void onHomieEvent(const HomieEvent& event) {
     case HomieEventType::WIFI_DISCONNECTED:
       // Do whatever you want when Wi-Fi is disconnected in normal mode
 #ifdef DEBUG_EN
+      debugD("Wifi disconnected reason %d at time %d", (int)event.wifiReason, (int)millis());
+      wifi_lost_reason[wifi_lost_counter] = event.wifiReason == 0 ? 26 : event.wifiReason;
+      wifi_lost_time[wifi_lost_counter] = millis();
       wifi_lost_counter++;
-      wifi_lost_reason[wifi_lost_counter] = ((uint32_t)event.wifiReason == 0 ? 26 : (uint32_t)event.wifiReason);
 #endif
       // You can use event.wifiReason
       /*
@@ -198,8 +202,9 @@ void onHomieEvent(const HomieEvent& event) {
     case HomieEventType::MQTT_DISCONNECTED:
       // Do whatever you want when MQTT is disconnected in normal mode
 #ifdef DEBUG_EN
+      mqtt_lost_reason[mqtt_lost_counter] = (uint32_t)event.mqttReason == 0 ? 8 : (uint32_t)event.mqttReason;
+      mqtt_lost_time[mqtt_lost_counter] = millis();
       mqtt_lost_counter++;
-      mqtt_lost_reason[wifi_lost_counter] = ((uint32_t)event.mqttReason == 0 ? 8 : (uint32_t)event.mqttReason);
 #endif
       // You can use event.mqttReason
       /*
@@ -231,6 +236,7 @@ void onHomieEvent(const HomieEvent& event) {
 void setup() {
   Serial.begin(115200);
   Serial << endl << endl;
+  Homie.disableLedFeedback();
 
   // Start Homie  
   Homie_setFirmware("TempSensor", "0.2.0");
