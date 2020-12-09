@@ -6,6 +6,10 @@
 #include <Ticker.h>
 #include <RemoteDebug.h>  //https://github.com/JoaoLopesF/RemoteDebug
 
+#include <IR/IRremoteESP8266.h>
+#include <IR/IRsend.h>
+#include <IR/ir_Fujitsu.h>
+
 // Defines
 #define DHTPIN 5 
 #define DHTTYPE DHT11
@@ -21,6 +25,9 @@
 // Gloabal Variables
 DHT dht(DHTPIN, DHTTYPE);
 Ticker measurmentTimer;
+
+const uint16_t kIrLed = 4;  // ESP8266 GPIO pin to use. Recommended: 4 (D2).
+IRFujitsuAC ac(kIrLed, ARRAH2E);
 
 volatile float t = 0;
 volatile float h = 0;
@@ -40,6 +47,7 @@ uint32_t wifi_lost_time[10] = {0};
 
 // Nodes
 HomieNode MeasurementNode("Measurements", "Measurements", "string");
+HomieNode KlimaNode("Klima", "Klima", "string");
 
 void doMeasurement(void) {
   // Read five times all values
@@ -72,6 +80,30 @@ void mainHomieLoop(void) {
 
     globalEnableMeasurment = false;
   }
+}
+
+bool switchPowerHandler(const HomieRange& range, const String& value) {
+  if(value.equals("true")){
+    Serial.println("Turn On AC");
+    ac.setCmd(kFujitsuAcCmdTurnOn);
+    ac.send();
+  } else {
+    Serial.println("Turn Off AC");
+    ac.setCmd(kFujitsuAcCmdTurnOff);
+    ac.send();
+  }
+  return true;
+}
+
+bool setModeHandler(const HomieRange& range, const String& value) {
+  Serial.println("Set: Mode Auto, 20°C, Fan Auto, Swing On");
+  ac.setSwing(kFujitsuAcSwingHoriz);
+  ac.setMode(kFujitsuAcModeAuto);
+  ac.setFanSpeed(kFujitsuAcFanAuto);
+  ac.setTemp(20);  // 20C
+  ac.setCmd(kFujitsuAcCmdTurnOn);
+  ac.send();
+  return true;
 }
 
 #ifdef DEBUG_EN
@@ -243,9 +275,22 @@ void setup() {
   Homie.onEvent(onHomieEvent); // before Homie.setup()
   measurmentTimer.attach(MeasurementTimeInSeconds, enableMeasurment);
   dht.begin();
+  ac.begin();
 
   MeasurementNode.advertise("Temperatur").setName("Temp").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Humidity").setName("Humidity").setRetained(true).setDatatype("float");
+
+  KlimaNode.advertise("power").setName("Powertoggle").setRetained(true).setDatatype("boolean").settable(switchPowerHandler);
+  KlimaNode.advertise("mode").setName("setMode").setRetained(true).setDatatype("boolean").settable(setModeHandler);
+
+  // Setting default state for A/C.
+  // See `fujitsu_ac_remote_model_t` in `ir_Fujitsu.h` for a list of models.
+  ac.setModel(ARRAH2E);
+  ac.setSwing(kFujitsuAcSwingOff);
+  ac.setMode(kFujitsuAcModeAuto);
+  ac.setFanSpeed(kFujitsuAcFanQuiet);
+  ac.setTemp(20);  // 20C
+  ac.setCmd(kFujitsuAcCmdTurnOn);
 
   Homie.setup();
   ArduinoOTA.onStart([]() {
