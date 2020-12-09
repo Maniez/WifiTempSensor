@@ -17,7 +17,6 @@
 #ifdef DEBUG_EN
 #define HOST_NAME "tempsensor-3"
 #endif
-//#define USE_MDNS true
 
 // Gloabal Variables
 DHT dht(DHTPIN, DHTTYPE);
@@ -64,7 +63,7 @@ void enableMeasurment(void){
 
 void mainHomieLoop(void) {
   if(globalEnableMeasurment == true) {
-    // Do measurement of Temp,humidty and voltage
+    // Do measurement of Temp and humidty
     Serial << "Do Measurement" << endl;
     doMeasurement();
 
@@ -250,7 +249,7 @@ void setup() {
 
   Homie.setup();
   ArduinoOTA.onStart([]() {
-  Serial.println("Start");
+    Serial.println("Start");
   });
   ArduinoOTA.onEnd([]() {
     Serial.println("\nEnd");
