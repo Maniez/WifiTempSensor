@@ -1,5 +1,5 @@
 {
-  "name": "Temperatur Sensor und IR Klimaremote",
+  "name": "Temperatur Sensor",
   "device_id": "tempsensor-0",
   "device_stats_interval": 60,
   "wifi": {
