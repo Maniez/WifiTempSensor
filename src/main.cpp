@@ -6,10 +6,6 @@
 #include <Ticker.h>
 #include <RemoteDebug.h> //https://github.com/JoaoLopesF/RemoteDebug
 
-#include <IR/IRremoteESP8266.h>
-#include <IR/IRsend.h>
-#include <IR/ir_Fujitsu.h>
-
 // Defines
 #define DHTPIN 5
 #define DHTTYPE DHT11
@@ -25,9 +21,6 @@
 // Gloabal Variables
 DHT dht(DHTPIN, DHTTYPE);
 Ticker measurmentTimer;
-
-const uint16_t kIrLed = 4; // ESP8266 GPIO pin to use. Recommended: 4 (D2).
-IRFujitsuAC ac(kIrLed, ARRAH2E);
 
 volatile float t = 0;
 volatile float h = 0;
@@ -47,7 +40,6 @@ uint32_t wifi_lost_time[10] = {0};
 
 // Nodes
 HomieNode MeasurementNode("Measurements", "Measurements", "string");
-HomieNode KlimaNode("Klima", "Klima", "string");
 
 void doMeasurement(void)
 {
@@ -85,77 +77,6 @@ void mainHomieLoop(void)
 
     globalEnableMeasurment = false;
   }
-}
-
-void printState()
-{
-  // Display the settings.
-  Serial.println("Fujitsu A/C remote is in the following state:");
-  Serial.printf("  %s\n", ac.toString().c_str());
-  // Display the encoded IR sequence.
-  unsigned char *ir_code = ac.getRaw();
-  Serial.print("IR Code: 0x");
-  for (uint8_t i = 0; i < ac.getStateLength(); i++)
-    Serial.printf("%02X", ir_code[i]);
-  Serial.println();
-}
-
-bool setPowerHandler(const HomieRange &range, const String &value)
-{
-  if (value.equals("true"))
-  {
-    Serial.println("Turn On AC");
-    ac.setCmd(kFujitsuAcCmdTurnOn);
-  }
-  else
-  {
-    Serial.println("Turn Off AC");
-    ac.setCmd(kFujitsuAcCmdTurnOff);
-  }
-  ac.send();
-  return true;
-}
-
-bool setTempHandler(const HomieRange &range, const String &value)
-{
-  Serial.println("Set: " + value + "°C");
-  ac.setTemp(value.toInt());
-  ac.send();
-  printState();
-  return true;
-}
-
-bool setSwingHandler(const HomieRange &range, const String &value)
-{
-  if (value.equals("true"))
-  {
-    Serial.println("Set: Swing On");
-    ac.setSwing(kFujitsuAcSwingVert);
-    printState();
-  }
-  else
-  {
-    Serial.println("Set: Swing Off");
-    ac.setSwing(kFujitsuAcSwingOff);
-  }
-  ac.send();
-  return true;
-}
-
-bool setFanHandler(const HomieRange &range, const String &value)
-{
-  Serial.println("Set: Fan " + value);
-  ac.setFanSpeed(value.toInt());
-  ac.send();
-  return true;
-}
-
-bool setModeHandler(const HomieRange &range, const String &value)
-{
-  Serial.println("Set: Fan " + value);
-  ac.setMode(value.toInt());
-  ac.send();
-  return true;
 }
 
 #ifdef DEBUG_EN
@@ -337,25 +258,9 @@ void setup()
   Homie.onEvent(onHomieEvent); // before Homie.setup()
   measurmentTimer.attach(MeasurementTimeInSeconds, enableMeasurment);
   dht.begin();
-  ac.begin();
 
   MeasurementNode.advertise("Temperatur").setName("Temp").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Humidity").setName("Humidity").setRetained(true).setDatatype("float");
-
-  KlimaNode.advertise("power").setName("Powertoggle").setRetained(true).setDatatype("boolean").settable(setPowerHandler);
-  KlimaNode.advertise("temperatur").setName("Temperatur").setRetained(true).setDatatype("integer").settable(setTempHandler);
-  KlimaNode.advertise("swing").setName("Swing").setRetained(true).setDatatype("boolean").settable(setSwingHandler);
-  KlimaNode.advertise("fan").setName("Fan").setRetained(true).setDatatype("integer").settable(setFanHandler);
-  KlimaNode.advertise("mode").setName("Mode").setRetained(true).setDatatype("integer").settable(setModeHandler);
-
-  // Setting default state for A/C.
-  // See `fujitsu_ac_remote_model_t` in `ir_Fujitsu.h` for a list of models.
-  ac.setModel(ARRAH2E);
-  ac.setSwing(kFujitsuAcSwingOff);
-  ac.setMode(kFujitsuAcModeAuto);
-  ac.setFanSpeed(kFujitsuAcFanQuiet);
-  ac.setTemp(20); // 20C
-  ac.setCmd(kFujitsuAcCmdTurnOn);
 
   Homie.setup();
   ArduinoOTA.onStart([]() {
