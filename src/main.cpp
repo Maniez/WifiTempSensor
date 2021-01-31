@@ -12,7 +12,7 @@
 
 // Defines
 #define DHTPIN 5
-#define DHTTYPE DHT11
+#define DHTTYPE DHT22
 #define MeasurementTimeInSeconds 300
 #define measurementsPerInterval 5
 
