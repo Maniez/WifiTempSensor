@@ -25,6 +25,8 @@ Ticker measurmentTimer;
 volatile float t = 0;
 volatile float h = 0;
 
+volatile float calibartion = -0.9;
+
 bool globalEnableMeasurment = true;
 
 #ifdef DEBUG_EN
@@ -53,7 +55,7 @@ void doMeasurement(void)
     delay(100);
   }
   // Calculate the mean of all values
-  t = t / measurementsPerInterval;
+  t = t / measurementsPerInterval + calibartion;
   h = h / measurementsPerInterval;
   Serial << "Send Temperatur: " << t << endl;
   Serial << "Send Humidity: " << h << endl;
