@@ -41,8 +41,8 @@ uint32_t mqtt_lost_counter = 0;
 uint32_t mqtt_lost_reason[10] = {0};
 uint32_t mqtt_lost_time[10] = {0};
 uint32_t wifi_lost_counter = 0;
-uint32_t wifi_lost_reason[10] = {0};
-uint32_t wifi_lost_time[10] = {0};
+uint32_t wifi_lost_reason[50] = {0};
+uint32_t wifi_lost_time[50] = {0};
 #endif
 
 // Nodes
@@ -172,13 +172,13 @@ void processCmdRemoteDebug()
 
     // Print Debug variables
     debugD("Wifi disconnected %d times", wifi_lost_counter);
-    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < 10); i++)
+    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < 50); i++)
     {
       debugD("Wifi disconnected reason for disconnect %d was: %d at time %d", i + 1, wifi_lost_reason[i], wifi_lost_time[i]);
     }
 
     debugD("MQTT disconnected %d times", mqtt_lost_counter);
-    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < 10); i++)
+    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < 50); i++)
     {
       debugD("MQTT disconnected reason for disconnect %d was: %d at time %d", i + 1, mqtt_lost_reason[i], mqtt_lost_time[i]);
     }
@@ -188,13 +188,13 @@ void processCmdRemoteDebug()
 
     // Clear Debug variables
     mqtt_lost_counter = 0;
-    for (uint8_t i = 0; i < 10; i++)
+    for (uint8_t i = 0; i < 50; i++)
     {
       mqtt_lost_reason[i] = 0;
     }
 
     wifi_lost_counter = 0;
-    for (uint8_t i = 0; i < 10; i++)
+    for (uint8_t i = 0; i < 50; i++)
     {
       wifi_lost_reason[i] = 0;
     }
