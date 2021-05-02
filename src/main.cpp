@@ -196,13 +196,13 @@ void processCmdRemoteDebug()
     EEPROM_.end();
 
     debugD("Wifi disconnected %d times", wifi_lost_counter);
-    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < 10); i++)
+    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < DEBUG_SLOTS); i++)
     {
       debugD("Wifi disconnected reason for disconnect %d was: %d at time %d", i + 1, wifi_lost_reason[i], wifi_lost_time[i]);
     }
 
     debugD("MQTT disconnected %d times", mqtt_lost_counter);
-    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < 10); i++)
+    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < DEBUG_SLOTS); i++)
     {
       debugD("MQTT disconnected reason for disconnect %d was: %d at time %d", i + 1, mqtt_lost_reason[i], mqtt_lost_time[i]);
     }
@@ -213,7 +213,8 @@ void processCmdRemoteDebug()
     // Clear Debug variables
     EEPROM_.begin(1024);
     mqtt_lost_counter = 0;
-    for (uint8_t i = 0; i < 10; i++)
+    EEPROM_.put(0, mqtt_lost_counter);
+    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
     {
       mqtt_lost_reason[i] = 0;
       EEPROM_.put(4 + i * 8, mqtt_lost_reason[i]);
@@ -222,7 +223,8 @@ void processCmdRemoteDebug()
     }
 
     wifi_lost_counter = 0;
-    for (uint8_t i = 0; i < 10; i++)
+    EEPROM_.put(404, wifi_lost_counter);
+    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
     {
       wifi_lost_reason[i] = 0;
       EEPROM_.put(408 + i * 8, wifi_lost_reason[i]);
