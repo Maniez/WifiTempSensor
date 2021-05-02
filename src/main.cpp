@@ -5,6 +5,8 @@
 #include <SPI.h>
 #include <Ticker.h>
 #include <RemoteDebug.h> //https://github.com/JoaoLopesF/RemoteDebug
+#include <Esp.h>
+#include <EEPROM.h>
 
 // Defines
 #define DHTPIN 5
@@ -19,6 +21,9 @@
 #endif
 
 // Gloabal Variables
+EspClass ESP_;
+EEPROMClass EEPROM_;
+
 DHT dht(DHTPIN, DHTTYPE);
 Ticker measurmentTimer;
 
@@ -30,14 +35,15 @@ volatile float calibartion = -0.9;
 bool globalEnableMeasurment = true;
 
 #ifdef DEBUG_EN
+#define DEBUG_SLOTS 50
 RemoteDebug Debug;
 
 uint32_t mqtt_lost_counter = 0;
-uint32_t mqtt_lost_reason[10] = {0};
-uint32_t mqtt_lost_time[10] = {0};
+uint32_t mqtt_lost_reason[DEBUG_SLOTS] = {0};
+uint32_t mqtt_lost_time[DEBUG_SLOTS] = {0};
 uint32_t wifi_lost_counter = 0;
-uint32_t wifi_lost_reason[10] = {0};
-uint32_t wifi_lost_time[10] = {0};
+uint32_t wifi_lost_reason[DEBUG_SLOTS] = {0};
+uint32_t wifi_lost_time[DEBUG_SLOTS] = {0};
 #endif
 
 // Nodes
@@ -94,14 +100,32 @@ void processCmdRemoteDebug()
   {
 
     // Print Debug variables
+    EEPROM_.begin(1024);
+    EEPROM_.get(0, mqtt_lost_counter);
+    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
+    {
+      EEPROM_.get(4 + i * 8, mqtt_lost_reason[i]);
+      EEPROM_.get(8 + i * 8, mqtt_lost_time[i]);
+    }
+
+    EEPROM_.get(404, wifi_lost_counter);
+    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
+    {
+      EEPROM_.get(408 + i * 8, wifi_lost_reason[i]);
+      EEPROM_.get(412 + i * 8, wifi_lost_time[i]);
+    }
+
+    EEPROM_.commit();
+    EEPROM_.end();
+
     debugD("Wifi disconnected %d times", wifi_lost_counter);
-    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < 10); i++)
+    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < DEBUG_SLOTS); i++)
     {
       debugD("Wifi disconnected reason for disconnect %d was: %d at time %d", i + 1, wifi_lost_reason[i], wifi_lost_time[i]);
     }
 
     debugD("MQTT disconnected %d times", mqtt_lost_counter);
-    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < 10); i++)
+    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < DEBUG_SLOTS); i++)
     {
       debugD("MQTT disconnected reason for disconnect %d was: %d at time %d", i + 1, mqtt_lost_reason[i], mqtt_lost_time[i]);
     }
@@ -110,17 +134,29 @@ void processCmdRemoteDebug()
   {
 
     // Clear Debug variables
+    EEPROM_.begin(1024);
     mqtt_lost_counter = 0;
-    for (uint8_t i = 0; i < 10; i++)
+    EEPROM_.put(0, mqtt_lost_counter);
+    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
     {
       mqtt_lost_reason[i] = 0;
+      EEPROM_.put(4 + i * 8, mqtt_lost_reason[i]);
+      mqtt_lost_time[i] = 0;
+      EEPROM_.put(8 + i * 8, mqtt_lost_time[i]);
     }
 
     wifi_lost_counter = 0;
-    for (uint8_t i = 0; i < 10; i++)
+    EEPROM_.put(404, wifi_lost_counter);
+    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
     {
       wifi_lost_reason[i] = 0;
+      EEPROM_.put(408 + i * 8, wifi_lost_reason[i]);
+      wifi_lost_time[i] = 0;
+      EEPROM_.put(412 + i * 8, wifi_lost_time[i]);
     }
+
+    EEPROM_.commit();
+    EEPROM_.end();
   }
 }
 #endif
@@ -177,6 +213,14 @@ void onHomieEvent(const HomieEvent &event)
     debugD("Wifi disconnected reason %d at time %d", (int)event.wifiReason, (int)millis());
     wifi_lost_reason[wifi_lost_counter] = event.wifiReason == 0 ? 26 : event.wifiReason;
     wifi_lost_time[wifi_lost_counter] = millis();
+
+    EEPROM_.begin(1024);
+    EEPROM_.put(404, wifi_lost_counter);
+    EEPROM_.put(408 + wifi_lost_counter * 8, wifi_lost_reason[wifi_lost_counter]);
+    EEPROM_.put(412 + wifi_lost_counter * 8, wifi_lost_time[wifi_lost_counter]);
+    EEPROM_.commit();
+    EEPROM_.end();
+
     wifi_lost_counter++;
 #endif
     // You can use event.wifiReason
@@ -218,6 +262,14 @@ void onHomieEvent(const HomieEvent &event)
 #ifdef DEBUG_EN
     mqtt_lost_reason[mqtt_lost_counter] = (uint32_t)event.mqttReason == 0 ? 8 : (uint32_t)event.mqttReason;
     mqtt_lost_time[mqtt_lost_counter] = millis();
+
+    EEPROM_.begin(1024);
+    EEPROM_.put(0, mqtt_lost_counter);
+    EEPROM_.put(4 + mqtt_lost_counter * 8, mqtt_lost_reason[mqtt_lost_counter]);
+    EEPROM_.put(8 + mqtt_lost_counter * 8, mqtt_lost_reason[mqtt_lost_counter]);
+    EEPROM_.commit();
+    EEPROM_.end();
+
     mqtt_lost_counter++;
 #endif
     // You can use event.mqttReason
