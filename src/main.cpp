@@ -49,22 +49,50 @@ uint32_t wifi_lost_time[DEBUG_SLOTS] = {0};
 // Nodes
 HomieNode MeasurementNode("Measurements", "Measurements", "string");
 
-void doMeasurement(void)
+bool doMeasurement(void)
 {
+  static int i = 0;
+  static uint32_t time = 0;
+
+  bool finished = false;
   // Read five times all values
-  t = 0;
-  h = 0;
-  for (int i = 0; i < measurementsPerInterval; i++)
+  if (i == 0)
   {
-    t += dht.readTemperature();
-    h += dht.readHumidity();
-    delay(100);
+    t = dht.readTemperature();
+    h = dht.readHumidity();
+    time = millis();
+    i++;
   }
-  // Calculate the mean of all values
-  t = t / measurementsPerInterval + calibartion;
-  h = h / measurementsPerInterval;
-  Serial << "Send Temperatur: " << t << endl;
-  Serial << "Send Humidity: " << h << endl;
+  else if (i < measurementsPerInterval)
+  {
+    if ((time + 100) < millis())
+    {
+      t += dht.readTemperature();
+      h += dht.readHumidity();
+      time = millis();
+      i++;
+    }
+    else if (time > millis())
+    {
+      time = millis();
+    }
+  }
+  else if (i == measurementsPerInterval)
+  {
+    // Calculate the mean of all values
+    t = t / measurementsPerInterval + calibartion;
+    h = h / measurementsPerInterval;
+    Serial << "Send Temperatur: " << t << endl;
+    Serial << "Send Humidity: " << h << endl;
+    i = 0;
+    finished = true;
+  }
+  else
+  {
+    i = 0;
+  }
+
+  return finished;
 }
 
 void enableMeasurment(void)
@@ -77,13 +105,14 @@ void mainHomieLoop(void)
   if (globalEnableMeasurment == true)
   {
     // Do measurement of Temp and humidty
-    Serial << "Do Measurement" << endl;
-    doMeasurement();
+    if (doMeasurement())
+    {
+      Serial << "Measurement done" << endl;
+      MeasurementNode.setProperty("Temperatur").send(String(t));
+      MeasurementNode.setProperty("Humidity").send(String(h));
 
-    MeasurementNode.setProperty("Temperatur").send(String(t));
-    MeasurementNode.setProperty("Humidity").send(String(h));
-
-    globalEnableMeasurment = false;
+      globalEnableMeasurment = false;
+    }
   }
 }
 
