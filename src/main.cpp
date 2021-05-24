@@ -37,6 +37,8 @@ IRFujitsuAC ac(kIrLed, ARRAH2E);
 volatile float t = 0;
 volatile float h = 0;
 
+volatile float calibartion = 0;
+
 bool globalEnableMeasurment = true;
 
 #ifdef DEBUG_EN
@@ -55,22 +57,50 @@ uint32_t wifi_lost_time[DEBUG_SLOTS] = {0};
 HomieNode MeasurementNode("Measurements", "Measurements", "string");
 HomieNode KlimaNode("Klima", "Klima", "string");
 
-void doMeasurement(void)
+bool doMeasurement(void)
 {
+  static int i = 0;
+  static uint32_t time = 0;
+
+  bool finished = false;
   // Read five times all values
-  t = 0;
-  h = 0;
-  for (int i = 0; i < measurementsPerInterval; i++)
+  if (i == 0)
   {
-    t += dht.readTemperature();
-    h += dht.readHumidity();
-    delay(100);
+    t = dht.readTemperature();
+    h = dht.readHumidity();
+    time = millis();
+    i++;
   }
-  // Calculate the mean of all values
-  t = t / measurementsPerInterval;
-  h = h / measurementsPerInterval;
-  Serial << "Send Temperatur: " << t << endl;
-  Serial << "Send Humidity: " << h << endl;
+  else if (i < measurementsPerInterval)
+  {
+    if ((time + 100) < millis())
+    {
+      t += dht.readTemperature();
+      h += dht.readHumidity();
+      time = millis();
+      i++;
+    }
+    else if (time > millis())
+    {
+      time = millis();
+    }
+  }
+  else if (i == measurementsPerInterval)
+  {
+    // Calculate the mean of all values
+    t = t / measurementsPerInterval + calibartion;
+    h = h / measurementsPerInterval;
+    Serial << "Send Temperatur: " << t << endl;
+    Serial << "Send Humidity: " << h << endl;
+    i = 0;
+    finished = true;
+  }
+  else
+  {
+    i = 0;
+  }
+
+  return finished;
 }
 
 void enableMeasurment(void)
@@ -83,13 +113,14 @@ void mainHomieLoop(void)
   if (globalEnableMeasurment == true)
   {
     // Do measurement of Temp and humidty
-    Serial << "Do Measurement" << endl;
-    doMeasurement();
+    if (doMeasurement())
+    {
+      Serial << "Measurement done" << endl;
+      MeasurementNode.setProperty("Temperatur").send(String(t));
+      MeasurementNode.setProperty("Humidity").send(String(h));
 
-    MeasurementNode.setProperty("Temperatur").send(String(t));
-    MeasurementNode.setProperty("Humidity").send(String(h));
-
-    globalEnableMeasurment = false;
+      globalEnableMeasurment = false;
+    }
   }
 }
 
@@ -410,28 +441,26 @@ void setup()
   ac.setCmd(kFujitsuAcCmdTurnOn);
 
   Homie.setup();
-  ArduinoOTA.onStart([]() {
-    Serial.println("Start");
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR)
-      Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR)
-      Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR)
-      Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR)
-      Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR)
-      Serial.println("End Failed");
-  });
+  ArduinoOTA.onStart([]()
+                     { Serial.println("Start"); });
+  ArduinoOTA.onEnd([]()
+                   { Serial.println("\nEnd"); });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
+                        { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+  ArduinoOTA.onError([](ota_error_t error)
+                     {
+                       Serial.printf("Error[%u]: ", error);
+                       if (error == OTA_AUTH_ERROR)
+                         Serial.println("Auth Failed");
+                       else if (error == OTA_BEGIN_ERROR)
+                         Serial.println("Begin Failed");
+                       else if (error == OTA_CONNECT_ERROR)
+                         Serial.println("Connect Failed");
+                       else if (error == OTA_RECEIVE_ERROR)
+                         Serial.println("Receive Failed");
+                       else if (error == OTA_END_ERROR)
+                         Serial.println("End Failed");
+                     });
   ArduinoOTA.begin();
 }
 
