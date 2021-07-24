@@ -379,6 +379,8 @@ void onHomieEvent(const HomieEvent &event)
     EEPROM_.end();
 
     mqtt_lost_counter++;
+
+    ESP.restart();
 #endif
     // You can use event.mqttReason
     /*
