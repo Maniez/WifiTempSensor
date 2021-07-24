@@ -27,6 +27,11 @@ EEPROMClass EEPROM_;
 DHT dht(DHTPIN, DHTTYPE);
 Ticker measurmentTimer;
 
+struct NVM
+{
+  uint16_t startup_counter;
+} NVM_Memory;
+
 volatile float t = 0;
 volatile float h = 0;
 
@@ -127,65 +132,16 @@ void processCmdRemoteDebug()
 
   if (lastCmd == "debug1")
   {
-
-    // Print Debug variables
-    EEPROM_.begin(1024);
-    EEPROM_.get(0, mqtt_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      EEPROM_.get(4 + i * 8, mqtt_lost_reason[i]);
-      EEPROM_.get(8 + i * 8, mqtt_lost_time[i]);
-    }
-
-    EEPROM_.get(404, wifi_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      EEPROM_.get(408 + i * 8, wifi_lost_reason[i]);
-      EEPROM_.get(412 + i * 8, wifi_lost_time[i]);
-    }
-
-    EEPROM_.commit();
-    EEPROM_.end();
-
-    debugD("Wifi disconnected %d times", wifi_lost_counter);
-    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < DEBUG_SLOTS); i++)
-    {
-      debugD("Wifi disconnected reason for disconnect %d was: %d at time %x", i + 1, wifi_lost_reason[i], wifi_lost_time[i]);
-    }
-
-    debugD("MQTT disconnected %d times", mqtt_lost_counter);
-    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < DEBUG_SLOTS); i++)
-    {
-      debugD("MQTT disconnected reason for disconnect %d was: %d at time %x", i + 1, mqtt_lost_reason[i], mqtt_lost_time[i]);
-    }
+    debugD("Device Startet %d times", NVM_Memory.startup_counter);
   }
   else if (lastCmd == "debug2")
   {
-
+    debugD("Device Startet %d times. Clear counter....", NVM_Memory.startup_counter);
     // Clear Debug variables
-    EEPROM_.begin(1024);
-    mqtt_lost_counter = 0;
-    EEPROM_.put(0, mqtt_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      mqtt_lost_reason[i] = 0;
-      EEPROM_.put(4 + i * 8, mqtt_lost_reason[i]);
-      mqtt_lost_time[i] = 0;
-      EEPROM_.put(8 + i * 8, mqtt_lost_time[i]);
-    }
-
-    wifi_lost_counter = 0;
-    EEPROM_.put(404, wifi_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      wifi_lost_reason[i] = 0;
-      EEPROM_.put(408 + i * 8, wifi_lost_reason[i]);
-      wifi_lost_time[i] = 0;
-      EEPROM_.put(412 + i * 8, wifi_lost_time[i]);
-    }
-
+    EEPROM_.begin(sizeof(NVM_Memory));
+    NVM_Memory.startup_counter = 0;
+    EEPROM_.put(0, NVM_Memory);
     EEPROM_.commit();
-    EEPROM_.end();
   }
 }
 #endif
@@ -238,20 +194,6 @@ void onHomieEvent(const HomieEvent &event)
     break;
   case HomieEventType::WIFI_DISCONNECTED:
     // Do whatever you want when Wi-Fi is disconnected in normal mode
-#ifdef DEBUG_EN
-    debugD("Wifi disconnected reason %d at time %d", (int)event.wifiReason, (int)millis());
-    wifi_lost_reason[wifi_lost_counter] = event.wifiReason == 0 ? 26 : event.wifiReason;
-    wifi_lost_time[wifi_lost_counter] = (Homie.isConnected() << 8) | (wifi_station_get_connect_status() << 4) | Homie.getMqttClient().connected();
-
-    EEPROM_.begin(1024);
-    EEPROM_.put(404, wifi_lost_counter);
-    EEPROM_.put(408 + wifi_lost_counter * 8, wifi_lost_reason[wifi_lost_counter]);
-    EEPROM_.put(412 + wifi_lost_counter * 8, wifi_lost_time[wifi_lost_counter]);
-    EEPROM_.commit();
-    EEPROM_.end();
-
-    wifi_lost_counter++;
-#endif
     // You can use event.wifiReason
     /*
         Wi-Fi Reason (souce: https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFi/examples/WiFiClientEvents/WiFiClientEvents.ino)
@@ -288,21 +230,6 @@ void onHomieEvent(const HomieEvent &event)
     break;
   case HomieEventType::MQTT_DISCONNECTED:
     // Do whatever you want when MQTT is disconnected in normal mode
-#ifdef DEBUG_EN
-    mqtt_lost_reason[mqtt_lost_counter] = (uint32_t)event.mqttReason == 0 ? 8 : (uint32_t)event.mqttReason;
-    mqtt_lost_time[mqtt_lost_counter] = (Homie.isConnected() << 8) | (wifi_station_get_connect_status() << 4) | Homie.getMqttClient().connected();
-
-    EEPROM_.begin(1024);
-    EEPROM_.put(0, mqtt_lost_counter);
-    EEPROM_.put(4 + mqtt_lost_counter * 8, mqtt_lost_reason[mqtt_lost_counter]);
-    EEPROM_.put(8 + mqtt_lost_counter * 8, mqtt_lost_time[mqtt_lost_counter]);
-    EEPROM_.commit();
-    EEPROM_.end();
-
-    mqtt_lost_counter++;
-
-    ESP.restart();
-#endif
     // You can use event.mqttReason
     /*
         MQTT Reason (source: https://github.com/marvinroger/async-mqtt-client/blob/master/src/AsyncMqttClient/DisconnectReasons.hpp)
@@ -315,6 +242,7 @@ void onHomieEvent(const HomieEvent &event)
         6 ESP8266_NOT_ENOUGH_SPACE
         7 TLS_BAD_FINGERPRINT
       */
+    ESP.restart();
     break;
   case HomieEventType::MQTT_PACKET_ACKNOWLEDGED:
     // Do whatever you want when an MQTT packet with QoS > 0 is acknowledged by the broker
@@ -332,6 +260,13 @@ void onHomieEvent(const HomieEvent &event)
 
 void setup()
 {
+  EEPROM_.begin(sizeof(NVM_Memory));
+  EEPROM_.get(0, NVM_Memory);
+  NVM_Memory.startup_counter++;
+  EEPROM_.put(0, NVM_Memory);
+  EEPROM_.commit();
+  EEPROM_.end();
+
   Serial.begin(115200);
   Serial << endl
          << endl;
