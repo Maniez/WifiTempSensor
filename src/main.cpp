@@ -31,6 +31,16 @@ EEPROMClass EEPROM_;
 DHT dht(DHTPIN, DHTTYPE);
 Ticker measurmentTimer;
 
+struct NVM
+{
+  uint16_t startup_counter;
+  int temperatur;
+  int mode;
+  int fan;
+  bool power;
+  bool swing;
+} NVM_Memory, NVM_Memory_backup;
+
 const uint16_t kIrLed = 4; // ESP8266 GPIO pin to use. Recommended: 4 (D2).
 IRFujitsuAC ac(kIrLed, ARRAH2E);
 
@@ -122,6 +132,16 @@ void mainHomieLoop(void)
       globalEnableMeasurment = false;
     }
   }
+
+  // check if write to flash is necessary
+  if (memcmp(&NVM_Memory_backup, &NVM_Memory, sizeof(NVM_Memory)) != 0)
+  {
+    EEPROM_.begin(sizeof(NVM_Memory));
+    EEPROM_.put(0, NVM_Memory);
+    EEPROM_.commit();
+    EEPROM_.end();
+    memcpy(&NVM_Memory_backup, &NVM_Memory, sizeof(NVM_Memory));
+  }
 }
 
 void printState()
@@ -139,59 +159,81 @@ void printState()
 
 bool setPowerHandler(const HomieRange &range, const String &value)
 {
-  if (value.equals("true"))
+  if (NVM_Memory.power != value.equals("true"))
   {
-    Serial.println("Turn On AC");
-    ac.setCmd(kFujitsuAcCmdTurnOn);
+    if (value.equals("true"))
+    {
+      Serial.println("Turn On AC");
+      NVM_Memory.power = true;
+      ac.setCmd(kFujitsuAcCmdTurnOn);
+    }
+    else
+    {
+      Serial.println("Turn Off AC");
+      NVM_Memory.power = false;
+      ac.setCmd(kFujitsuAcCmdTurnOff);
+    }
+    ac.send();
   }
-  else
-  {
-    Serial.println("Turn Off AC");
-    ac.setCmd(kFujitsuAcCmdTurnOff);
-  }
-  ac.send();
   return true;
 }
 
 bool setTempHandler(const HomieRange &range, const String &value)
 {
-  Serial.println("Set: " + value + "°C");
-  ac.setTemp(value.toInt());
-  ac.send();
-  printState();
+  if (NVM_Memory.temperatur != value.toInt())
+  {
+    Serial.println("Set: " + value + "°C");
+    NVM_Memory.temperatur = value.toInt();
+    ac.setTemp(value.toInt());
+    ac.send();
+    printState();
+  }
   return true;
 }
 
 bool setSwingHandler(const HomieRange &range, const String &value)
 {
-  if (value.equals("true"))
+  if (NVM_Memory.swing != value.equals("true"))
   {
-    Serial.println("Set: Swing On");
-    ac.setSwing(kFujitsuAcSwingVert);
-    printState();
+    if (value.equals("true"))
+    {
+      Serial.println("Set: Swing On");
+      NVM_Memory.swing = true;
+      ac.setSwing(kFujitsuAcSwingVert);
+      printState();
+    }
+    else
+    {
+      Serial.println("Set: Swing Off");
+      NVM_Memory.swing = false;
+      ac.setSwing(kFujitsuAcSwingOff);
+    }
+    ac.send();
   }
-  else
-  {
-    Serial.println("Set: Swing Off");
-    ac.setSwing(kFujitsuAcSwingOff);
-  }
-  ac.send();
   return true;
 }
 
 bool setFanHandler(const HomieRange &range, const String &value)
 {
-  Serial.println("Set: Fan " + value);
-  ac.setFanSpeed(value.toInt());
-  ac.send();
+  if (NVM_Memory.fan != value.toInt())
+  {
+    Serial.println("Set: Fan " + value);
+    NVM_Memory.fan = value.toInt();
+    ac.setFanSpeed(value.toInt());
+    ac.send();
+  }
   return true;
 }
 
 bool setModeHandler(const HomieRange &range, const String &value)
 {
-  Serial.println("Set: Fan " + value);
-  ac.setMode(value.toInt());
-  ac.send();
+  if (NVM_Memory.mode != value.toInt())
+  {
+    Serial.println("Set: Fan " + value);
+    NVM_Memory.mode = value.toInt();
+    ac.setMode(value.toInt());
+    ac.send();
+  }
   return true;
 }
 
@@ -206,65 +248,29 @@ void processCmdRemoteDebug()
 
   if (lastCmd == "debug1")
   {
-
-    // Print Debug variables
-    EEPROM_.begin(1024);
-    EEPROM_.get(0, mqtt_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      EEPROM_.get(4 + i * 8, mqtt_lost_reason[i]);
-      EEPROM_.get(8 + i * 8, mqtt_lost_time[i]);
-    }
-
-    EEPROM_.get(404, wifi_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      EEPROM_.get(408 + i * 8, wifi_lost_reason[i]);
-      EEPROM_.get(412 + i * 8, wifi_lost_time[i]);
-    }
-
-    EEPROM_.commit();
-    EEPROM_.end();
-
-    debugD("Wifi disconnected %d times", wifi_lost_counter);
-    for (uint32_t i = 0; (i < wifi_lost_counter) && (i < DEBUG_SLOTS); i++)
-    {
-      debugD("Wifi disconnected reason for disconnect %d was: %d at time %x", i + 1, wifi_lost_reason[i], wifi_lost_time[i]);
-    }
-
-    debugD("MQTT disconnected %d times", mqtt_lost_counter);
-    for (uint32_t i = 0; (i < mqtt_lost_counter) && (i < DEBUG_SLOTS); i++)
-    {
-      debugD("MQTT disconnected reason for disconnect %d was: %d at time %x", i + 1, mqtt_lost_reason[i], mqtt_lost_time[i]);
-    }
+    debugD("Device Startet %d times", NVM_Memory.startup_counter);
+    debugD("Power is at: %d", NVM_Memory.power);
+    debugD("Temp is at : %d", NVM_Memory.temperatur);
+    debugD("Mode is at : %d", NVM_Memory.mode);
+    debugD("Fan is at  : %d", NVM_Memory.fan);
+    debugD("Swing is at: %d", NVM_Memory.swing);
   }
   else if (lastCmd == "debug2")
   {
-
-    // Clear Debug variables
-    EEPROM_.begin(1024);
-    mqtt_lost_counter = 0;
-    EEPROM_.put(0, mqtt_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      mqtt_lost_reason[i] = 0;
-      EEPROM_.put(4 + i * 8, mqtt_lost_reason[i]);
-      mqtt_lost_time[i] = 0;
-      EEPROM_.put(8 + i * 8, mqtt_lost_time[i]);
-    }
-
-    wifi_lost_counter = 0;
-    EEPROM_.put(404, wifi_lost_counter);
-    for (uint8_t i = 0; i < DEBUG_SLOTS; i++)
-    {
-      wifi_lost_reason[i] = 0;
-      EEPROM_.put(408 + i * 8, wifi_lost_reason[i]);
-      wifi_lost_time[i] = 0;
-      EEPROM_.put(412 + i * 8, wifi_lost_time[i]);
-    }
-
-    EEPROM_.commit();
-    EEPROM_.end();
+    debugD("Device Startet %d times", NVM_Memory.startup_counter);
+    debugD("Power is at: %d", NVM_Memory.power);
+    debugD("Temp is at : %d", NVM_Memory.temperatur);
+    debugD("Mode is at : %d", NVM_Memory.mode);
+    debugD("Fan is at  : %d", NVM_Memory.fan);
+    debugD("Swing is at: %d", NVM_Memory.swing);
+    debugD("Clear struct....");
+    // Clear variables
+    NVM_Memory.startup_counter = 0;
+    NVM_Memory.power = 0;
+    NVM_Memory.temperatur = 20;
+    NVM_Memory.swing = 0;
+    NVM_Memory.fan = 0;
+    NVM_Memory.mode = 0;
   }
 }
 #endif
@@ -317,20 +323,6 @@ void onHomieEvent(const HomieEvent &event)
     break;
   case HomieEventType::WIFI_DISCONNECTED:
     // Do whatever you want when Wi-Fi is disconnected in normal mode
-#ifdef DEBUG_EN
-    debugD("Wifi disconnected reason %d at time %d", (int)event.wifiReason, (int)millis());
-    wifi_lost_reason[wifi_lost_counter] = event.wifiReason == 0 ? 26 : event.wifiReason;
-    wifi_lost_time[wifi_lost_counter] = (Homie.isConnected() << 8) | (wifi_station_get_connect_status() << 4) | Homie.getMqttClient().connected();
-
-    EEPROM_.begin(1024);
-    EEPROM_.put(404, wifi_lost_counter);
-    EEPROM_.put(408 + wifi_lost_counter * 8, wifi_lost_reason[wifi_lost_counter]);
-    EEPROM_.put(412 + wifi_lost_counter * 8, wifi_lost_time[wifi_lost_counter]);
-    EEPROM_.commit();
-    EEPROM_.end();
-
-    wifi_lost_counter++;
-#endif
     // You can use event.wifiReason
     /*
         Wi-Fi Reason (souce: https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFi/examples/WiFiClientEvents/WiFiClientEvents.ino)
@@ -367,21 +359,6 @@ void onHomieEvent(const HomieEvent &event)
     break;
   case HomieEventType::MQTT_DISCONNECTED:
     // Do whatever you want when MQTT is disconnected in normal mode
-#ifdef DEBUG_EN
-    mqtt_lost_reason[mqtt_lost_counter] = (uint32_t)event.mqttReason == 0 ? 8 : (uint32_t)event.mqttReason;
-    mqtt_lost_time[mqtt_lost_counter] = (Homie.isConnected() << 8) | (wifi_station_get_connect_status() << 4) | Homie.getMqttClient().connected();
-
-    EEPROM_.begin(1024);
-    EEPROM_.put(0, mqtt_lost_counter);
-    EEPROM_.put(4 + mqtt_lost_counter * 8, mqtt_lost_reason[mqtt_lost_counter]);
-    EEPROM_.put(8 + mqtt_lost_counter * 8, mqtt_lost_time[mqtt_lost_counter]);
-    EEPROM_.commit();
-    EEPROM_.end();
-
-    mqtt_lost_counter++;
-
-    ESP.restart();
-#endif
     // You can use event.mqttReason
     /*
         MQTT Reason (source: https://github.com/marvinroger/async-mqtt-client/blob/master/src/AsyncMqttClient/DisconnectReasons.hpp)
@@ -394,6 +371,7 @@ void onHomieEvent(const HomieEvent &event)
         6 ESP8266_NOT_ENOUGH_SPACE
         7 TLS_BAD_FINGERPRINT
       */
+    ESP.restart();
     break;
   case HomieEventType::MQTT_PACKET_ACKNOWLEDGED:
     // Do whatever you want when an MQTT packet with QoS > 0 is acknowledged by the broker
@@ -411,6 +389,14 @@ void onHomieEvent(const HomieEvent &event)
 
 void setup()
 {
+  EEPROM_.begin(sizeof(NVM_Memory));
+  EEPROM_.get(0, NVM_Memory);
+  NVM_Memory.startup_counter++;
+  EEPROM_.put(0, NVM_Memory);
+  EEPROM_.commit();
+  EEPROM_.end();
+  memcpy(&NVM_Memory_backup, &NVM_Memory, sizeof(NVM_Memory));
+
   Serial.begin(115200);
   Serial << endl
          << endl;
@@ -436,11 +422,11 @@ void setup()
   // Setting default state for A/C.
   // See `fujitsu_ac_remote_model_t` in `ir_Fujitsu.h` for a list of models.
   ac.setModel(ARRAH2E);
-  ac.setSwing(kFujitsuAcSwingOff);
-  ac.setMode(kFujitsuAcModeAuto);
-  ac.setFanSpeed(kFujitsuAcFanQuiet);
-  ac.setTemp(20); // 20C
-  ac.setCmd(kFujitsuAcCmdTurnOn);
+  ac.setSwing(NVM_Memory.swing);
+  ac.setMode(NVM_Memory.mode);
+  ac.setFanSpeed(NVM_Memory.fan);
+  ac.setTemp(NVM_Memory.temperatur);
+  ac.setCmd(NVM_Memory.power);
 
   Homie.setup();
   ArduinoOTA.onStart([]()
