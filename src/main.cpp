@@ -31,7 +31,6 @@ void onHomieEvent(const HomieEvent& event) {
       break;
     case HomieEventType::READY_TO_SLEEP:
       Homie.getLogger() << "Ready to sleep" << endl;
-      delay(10000);
       ESP.deepSleep(sleepTimeInSeconds*1e6);
       break;
     default:
