@@ -64,7 +64,7 @@ void setup() {
   // Do measurement of Temp,humidty and voltage
 
   Serial << "Read Batterylevel and Calc wether send is need" << endl;  
-  float batteryLevel_temp = analogRead(A0) * 420 / 420 / 1000; 
+  float batteryLevel_temp = (float)analogRead(A0) * 420 / 100 / 1000; 
   Serial << "Batterylevel new: " << batteryLevel_temp << " <-> old: " << RTC_Memory.batteryLevel << endl;
 
   if(abs(batteryLevel_temp - RTC_Memory.batteryLevel) < 0.01) {
