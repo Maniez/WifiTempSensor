@@ -4,7 +4,7 @@
 #include <SPI.h>
 
 // Defines
-#define sleepTimeInSeconds 30
+#define sleepTimeInSeconds 20
 
 // Settings
 ADC_MODE(ADC_VCC);
@@ -12,10 +12,12 @@ ADC_MODE(ADC_VCC);
 // Gloabal Variables
 
 // RTC Memory
-struct {
-  uint32_t bootCount = 0;
-  float temperatur = 0;
-} rtcMemory;
+struct NVM{
+  uint32_t bootCount;
+  float batteryLevel;
+  bool rainSensor;
+  uint32_t snedCounter;
+} NVM_Memory;
 
 
 // Nodes
@@ -29,7 +31,7 @@ void onHomieEvent(const HomieEvent& event) {
       break;
     case HomieEventType::READY_TO_SLEEP:
       Homie.getLogger() << "Ready to sleep" << endl;
-      Serial << "Runtime in ms: " << millis() << endl;
+      delay(10000);
       ESP.deepSleep(sleepTimeInSeconds*1e6);
       break;
     default:
@@ -43,37 +45,38 @@ void setup() {
   yield();
 
   // Init LED and Serial
-  Homie.disableLedFeedback();
+  //Homie.disableLedFeedback();
   Serial.begin(115200);
   Serial << endl << endl;
 
   // Print Wake-Up infos
   Serial << ESP.getResetReason() << endl;
   if (ESP.getResetReason() == "Power On") {
-    rtcMemory.bootCount = 0;
-    rtcMemory.temperatur = 0;
-    ESP.rtcUserMemoryWrite(0, (uint32_t *) &rtcMemory, sizeof(rtcMemory));
+    NVM_Memory.bootCount = 0;
+    NVM_Memory.batteryLevel = 0;
+    NVM_Memory.rainSensor = false;
+    NVM_Memory.snedCounter = 0;
+    ESP.rtcUserMemoryWrite(0, (uint32_t *) &NVM_Memory, sizeof(NVM_Memory));
   }
 
-  ESP.rtcUserMemoryRead(0, (uint32_t *) &rtcMemory, sizeof(rtcMemory));
-  Serial << String(rtcMemory.bootCount) << endl << endl;
-  rtcMemory.bootCount++;
-  ESP.rtcUserMemoryWrite(0, (uint32_t *) &rtcMemory, sizeof(rtcMemory));
+  ESP.rtcUserMemoryRead(0, (uint32_t *) &NVM_Memory, sizeof(NVM_Memory));
+  Serial << String(NVM_Memory.bootCount) << endl << endl;
+  NVM_Memory.bootCount++;
+  ESP.rtcUserMemoryWrite(0, (uint32_t *) &NVM_Memory, sizeof(NVM_Memory));
 
   // Startup finished 
   // Start pre productiv Code
   // Do measurement of Temp,humidty and voltage
 
-  /*
+  Serial << "Simulate 10s of processing...";
+  delay(10000);
   Serial << "Decide wheather goto sleep or send data" << endl;
-  if(abs((rtcMemory.temperatur - t)) < deltaTemp) {
-    Serial << "Temperatur difference is to small, send back to sleep" << endl;
-    Serial << "Runtime in ms: " << millis() << endl;
+  if(NVM_Memory.bootCount % 5 != 0) {
+    Serial << "Bootcount modulo" << (NVM_Memory.bootCount % 5) << endl;
     ESP.deepSleep(sleepTimeInSeconds*1e6);
   } 
-  */
 
-  ESP.rtcUserMemoryWrite(0, (uint32_t *) &rtcMemory, sizeof(rtcMemory));
+  ESP.rtcUserMemoryWrite(0, (uint32_t *) &NVM_Memory, sizeof(NVM_Memory));
   WiFi.forceSleepWake();
   WiFi.mode(WIFI_STA);
   // End pre productiv Code
@@ -84,10 +87,12 @@ void setup() {
   Homie_setFirmware("TempSensor", "0.1.0");
   Homie.onEvent(onHomieEvent);
 
+  /*
   MeasurementNode.advertise("Temperatur").setName("Temp").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Humidity").setName("Humidity").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Voltage").setName("Volt").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Bootcount").setName("Bootcount").setRetained(true).setDatatype("float");
+  */
 
   Homie.setup();
 }
