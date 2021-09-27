@@ -19,11 +19,12 @@ struct RTC{
 
 
 // Nodes
-HomieNode MeasurementNode("Measurements", "Measurements", "string");
+HomieNode BatteryNode("Battery", "Battery", "level");
 
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
     case HomieEventType::MQTT_READY:
+      BatteryNode.setProperty("BatteryLevel").send(String(RTC_Memory.batteryLevel));
       Homie.getLogger() << "✔ MQTT is ready, prepare to sleep..." << endl;
       Homie.prepareToSleep();
       break;
@@ -89,6 +90,7 @@ void setup() {
     MeasurementNode.advertise("Voltage").setName("Volt").setRetained(true).setDatatype("float");
     MeasurementNode.advertise("Bootcount").setName("Bootcount").setRetained(true).setDatatype("float");
     */
+    BatteryNode.advertise("BatteryLevel").setName("Level").setRetained(true).setDatatype("float");
 
     Homie.setup();
   }
