@@ -2,16 +2,22 @@
 #include <Homie.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <Ticker.h>
 
 
 // Defines
 #define sleepTimeInSeconds 30
 #define oversamplingSamples 16
 #define batterySendCount 45
+#define noConnectionSleepTimeInSeconds 1800
 
 // Settings
 
 // Gloabal Variables
+bool enableDeepSleep = false;
+uint16_t wifi_counter = 0;
+uint16_t mqtt_counter = 0;
+Ticker startupTicker;
 
 // RTC Memory
 struct RTC {
@@ -25,7 +31,11 @@ HomieNode RainSensorNode("Battery", "Battery", "level");
 
 void onHomieEvent(const HomieEvent &event) {
     switch (event.type) {
+        case HomieEventType::WIFI_CONNECTED:
+            wifi_counter = 0xffff;
+            break;
         case HomieEventType::MQTT_READY:
+            mqtt_counter = 0xffff;
             RainSensorNode.setProperty("BatteryLevel").send(String(RTC_Memory.batteryLevel));
             Homie.getLogger() << "Send battery level" << endl;
             RainSensorNode.setProperty("BootCount").send(String(RTC_Memory.bootCount));
@@ -36,10 +46,30 @@ void onHomieEvent(const HomieEvent &event) {
         case HomieEventType::READY_TO_SLEEP:
             Homie.getLogger() << "Ready to sleep" << endl;
             ESP.rtcUserMemoryWrite(0, (uint32_t *)&RTC_Memory, sizeof(RTC_Memory));
-            ESP.deepSleep(sleepTimeInSeconds * 1e6);
+            if(enableDeepSleep) {
+                ESP.deepSleep(noConnectionSleepTimeInSeconds * 1e6);
+            } else {
+                ESP.deepSleep(sleepTimeInSeconds * 1e6);
+            }
             break;
         default:
             break;
+    }
+}
+
+void checkStartUp() {
+    if(wifi_counter != 0xffff) {
+        wifi_counter++;
+        if(wifi_counter > 200) {
+            Serial << "Wifi not connected: " << wifi_counter << endl;
+            enableDeepSleep = true;
+        }
+    } else if(mqtt_counter != 0xffff) {
+        mqtt_counter++;
+        if(mqtt_counter > 100) {
+            Serial << "MQTT not connected: " << mqtt_counter << endl;
+            enableDeepSleep = true;
+        }
     }
 }
 
@@ -47,6 +77,9 @@ void setup() {
     // send wifi directly to sleep to reduce power consumption
     WiFi.forceSleepBegin();
     yield();
+
+    //start Startup timer
+    startupTicker.attach_ms(100, checkStartUp);
 
     // Init LED and Serial
     Serial.begin(115200);
@@ -120,4 +153,7 @@ void setup() {
 void loop() {
     // put your main code here, to run repeatedly:
     Homie.loop();
+    if(enableDeepSleep) {
+        Homie.prepareToSleep();
+    }
 }
