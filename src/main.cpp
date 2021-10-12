@@ -26,7 +26,7 @@ struct RTC {
 } RTC_Memory;
 
 // Nodes
-HomieNode RainSensorNode("Battery", "Battery", "level");
+HomieNode RainSensorNode("Measurment", "measurment", "level");
 
 void onHomieEvent(const HomieEvent &event) {
     switch (event.type) {
@@ -141,7 +141,7 @@ void setup() {
 
         RainSensorNode.advertise("BatteryLevel").setName("Level").setDatatype("float");
         RainSensorNode.advertise("BootCount").setName("BootCnt").setDatatype("integer");
-        RainSensorNode.advertise("RainState").setName("Rain").setDatatype("boolean");
+        RainSensorNode.advertise("RainState").setName("Rain").setDatatype("integer");
 
         Homie.setup();
     } else {
