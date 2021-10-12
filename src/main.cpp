@@ -1,9 +1,8 @@
 #include <Arduino.h>
 #include <Homie.h>
 #include <SPI.h>
-#include <Wire.h>
 #include <Ticker.h>
-
+#include <Wire.h>
 
 // Defines
 #define sleepTimeInSeconds 30
@@ -40,13 +39,15 @@ void onHomieEvent(const HomieEvent &event) {
             Homie.getLogger() << "Send battery level" << endl;
             RainSensorNode.setProperty("BootCount").send(String(RTC_Memory.bootCount));
             Homie.getLogger() << "Send boot count" << endl;
+            RainSensorNode.setProperty("RainState").send(String(RTC_Memory.rainSensor));
+            Homie.getLogger() << "Send rain state" << endl;
             Homie.getLogger() << "✔ MQTT is ready, prepare to sleep..." << endl;
             Homie.prepareToSleep();
             break;
         case HomieEventType::READY_TO_SLEEP:
             Homie.getLogger() << "Ready to sleep" << endl;
             ESP.rtcUserMemoryWrite(0, (uint32_t *)&RTC_Memory, sizeof(RTC_Memory));
-            if(enableDeepSleep) {
+            if (enableDeepSleep) {
                 ESP.deepSleep(noConnectionSleepTimeInSeconds * 1e6);
             } else {
                 ESP.deepSleep(sleepTimeInSeconds * 1e6);
@@ -58,15 +59,15 @@ void onHomieEvent(const HomieEvent &event) {
 }
 
 void checkStartUp() {
-    if(wifi_counter != 0xffff) {
+    if (wifi_counter != 0xffff) {
         wifi_counter++;
-        if(wifi_counter > 200) {
+        if (wifi_counter > 200) {
             Serial << "Wifi not connected: " << wifi_counter << endl;
             enableDeepSleep = true;
         }
-    } else if(mqtt_counter != 0xffff) {
+    } else if (mqtt_counter != 0xffff) {
         mqtt_counter++;
-        if(mqtt_counter > 100) {
+        if (mqtt_counter > 100) {
             Serial << "MQTT not connected: " << mqtt_counter << endl;
             enableDeepSleep = true;
         }
@@ -153,7 +154,7 @@ void setup() {
 void loop() {
     // put your main code here, to run repeatedly:
     Homie.loop();
-    if(enableDeepSleep) {
+    if (enableDeepSleep) {
         Homie.prepareToSleep();
     }
 }
