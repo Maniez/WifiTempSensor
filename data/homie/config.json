@@ -1,6 +1,6 @@
 {
-  "name": "Temperatur Sensor und IR Klimaremote",
-  "device_id": "tempsensor_and_ac_irremote-0",
+  "name": "Rain sensor capacitive",
+  "device_id": "rain_sensor_cap-0",
   "device_stats_interval": 60,
   "wifi": {
     "ssid": "D-Lan",

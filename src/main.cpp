@@ -1,49 +1,33 @@
 #include <Homie.h>
 #include <DHT.h>
 #include <ArduinoOTA.h>
-#include <Wire.h>
-#include <SPI.h>
 #include <Ticker.h>
 #include <RemoteDebug.h> //https://github.com/JoaoLopesF/RemoteDebug
 #include <Esp.h>
 #include <EEPROM.h>
 
-#include <IR/IRremoteESP8266.h>
-#include <IR/IRsend.h>
-#include <IR/ir_Fujitsu.h>
-
 // Defines
-#define DHTPIN 5
-#define DHTTYPE DHT22
-#define MeasurementTimeInSeconds 300
+#define DHTPIN D1
+#define DHTTYPE DHT11
+#define MeasurementTimeInSeconds 10
 #define measurementsPerInterval 5
 
-#define DEBUG_EN
+#define RAIN_PIN D5
+
+// #define DEBUG_EN
 
 #ifdef DEBUG_EN
 #define HOST_NAME "tempsensor_and_ac_irremote-0"
 #endif
 
-// Gloabal Variables
-EspClass ESP_;
-EEPROMClass EEPROM_;
+// Application functions
+double getFrequeny(void);
+bool doTemperaturMeasurement(void);
+void enableMeasurment(void);
 
+// Gloabal Variables
 DHT dht(DHTPIN, DHTTYPE);
 Ticker measurmentTimer;
-
-struct NVM
-{
-  uint16_t startup_counter;
-  int temperatur;
-  int mode;
-  int fan;
-  bool power;
-  bool swing;
-} NVM_Memory, NVM_Memory_backup;
-
-const uint16_t kIrLed = 4; // ESP8266 GPIO pin to use. Recommended: 4 (D2).
-IRFujitsuAC ac(kIrLed, ARRAH2E);
-
 volatile float t = 0;
 volatile float h = 0;
 
@@ -65,177 +49,6 @@ uint32_t wifi_lost_time[DEBUG_SLOTS] = {0};
 
 // Nodes
 HomieNode MeasurementNode("Measurements", "Measurements", "string");
-HomieNode KlimaNode("Klima", "Klima", "string");
-
-bool doMeasurement(void)
-{
-  static int i = 0;
-  static uint32_t time = 0;
-
-  bool finished = false;
-  // Read five times all values
-  if (i == 0)
-  {
-    t = dht.readTemperature();
-    h = dht.readHumidity();
-    time = millis();
-    i++;
-  }
-  else if (i < measurementsPerInterval)
-  {
-    if ((time + 100) < millis())
-    {
-      t += dht.readTemperature();
-      h += dht.readHumidity();
-      time = millis();
-      i++;
-    }
-    else if (time > millis())
-    {
-      time = millis();
-    }
-  }
-  else if (i == measurementsPerInterval)
-  {
-    // Calculate the mean of all values
-    t = t / measurementsPerInterval + calibartion;
-    h = h / measurementsPerInterval;
-    Serial << "Send Temperatur: " << t << endl;
-    Serial << "Send Humidity: " << h << endl;
-    i = 0;
-    finished = true;
-  }
-  else
-  {
-    i = 0;
-  }
-
-  return finished;
-}
-
-void enableMeasurment(void)
-{
-  globalEnableMeasurment = true;
-}
-
-void mainHomieLoop(void)
-{
-  if (globalEnableMeasurment == true)
-  {
-    // Do measurement of Temp and humidty
-    if (doMeasurement())
-    {
-      Serial << "Measurement done" << endl;
-      MeasurementNode.setProperty("Temperatur").send(String(t));
-      MeasurementNode.setProperty("Humidity").send(String(h));
-
-      globalEnableMeasurment = false;
-    }
-  }
-
-  // check if write to flash is necessary
-  if (memcmp(&NVM_Memory_backup, &NVM_Memory, sizeof(NVM_Memory)) != 0)
-  {
-    EEPROM_.begin(sizeof(NVM_Memory));
-    EEPROM_.put(0, NVM_Memory);
-    EEPROM_.commit();
-    EEPROM_.end();
-    memcpy(&NVM_Memory_backup, &NVM_Memory, sizeof(NVM_Memory));
-  }
-}
-
-void printState()
-{
-  // Display the settings.
-  Serial.println("Fujitsu A/C remote is in the following state:");
-  Serial.printf("  %s\n", ac.toString().c_str());
-  // Display the encoded IR sequence.
-  unsigned char *ir_code = ac.getRaw();
-  Serial.print("IR Code: 0x");
-  for (uint8_t i = 0; i < ac.getStateLength(); i++)
-    Serial.printf("%02X", ir_code[i]);
-  Serial.println();
-}
-
-bool setPowerHandler(const HomieRange &range, const String &value)
-{
-  if (NVM_Memory.power != value.equals("true"))
-  {
-    if (value.equals("true"))
-    {
-      Serial.println("Turn On AC");
-      NVM_Memory.power = true;
-      ac.setCmd(kFujitsuAcCmdTurnOn);
-    }
-    else
-    {
-      Serial.println("Turn Off AC");
-      NVM_Memory.power = false;
-      ac.setCmd(kFujitsuAcCmdTurnOff);
-    }
-    ac.send();
-  }
-  return true;
-}
-
-bool setTempHandler(const HomieRange &range, const String &value)
-{
-  if (NVM_Memory.temperatur != value.toInt())
-  {
-    Serial.println("Set: " + value + "°C");
-    NVM_Memory.temperatur = value.toInt();
-    ac.setTemp(value.toInt());
-    ac.send();
-    printState();
-  }
-  return true;
-}
-
-bool setSwingHandler(const HomieRange &range, const String &value)
-{
-  if (NVM_Memory.swing != value.equals("true"))
-  {
-    if (value.equals("true"))
-    {
-      Serial.println("Set: Swing On");
-      NVM_Memory.swing = true;
-      ac.setSwing(kFujitsuAcSwingVert);
-      printState();
-    }
-    else
-    {
-      Serial.println("Set: Swing Off");
-      NVM_Memory.swing = false;
-      ac.setSwing(kFujitsuAcSwingOff);
-    }
-    ac.send();
-  }
-  return true;
-}
-
-bool setFanHandler(const HomieRange &range, const String &value)
-{
-  if (NVM_Memory.fan != value.toInt())
-  {
-    Serial.println("Set: Fan " + value);
-    NVM_Memory.fan = value.toInt();
-    ac.setFanSpeed(value.toInt());
-    ac.send();
-  }
-  return true;
-}
-
-bool setModeHandler(const HomieRange &range, const String &value)
-{
-  if (NVM_Memory.mode != value.toInt())
-  {
-    Serial.println("Set: Fan " + value);
-    NVM_Memory.mode = value.toInt();
-    ac.setMode(value.toInt());
-    ac.send();
-  }
-  return true;
-}
 
 #ifdef DEBUG_EN
 
@@ -249,28 +62,16 @@ void processCmdRemoteDebug()
   if (lastCmd == "debug1")
   {
     debugD("Device Startet %d times", NVM_Memory.startup_counter);
-    debugD("Power is at: %d", NVM_Memory.power);
     debugD("Temp is at : %d", NVM_Memory.temperatur);
-    debugD("Mode is at : %d", NVM_Memory.mode);
-    debugD("Fan is at  : %d", NVM_Memory.fan);
-    debugD("Swing is at: %d", NVM_Memory.swing);
   }
   else if (lastCmd == "debug2")
   {
     debugD("Device Startet %d times", NVM_Memory.startup_counter);
-    debugD("Power is at: %d", NVM_Memory.power);
     debugD("Temp is at : %d", NVM_Memory.temperatur);
-    debugD("Mode is at : %d", NVM_Memory.mode);
-    debugD("Fan is at  : %d", NVM_Memory.fan);
-    debugD("Swing is at: %d", NVM_Memory.swing);
     debugD("Clear struct....");
     // Clear variables
     NVM_Memory.startup_counter = 0;
-    NVM_Memory.power = 0;
     NVM_Memory.temperatur = 20;
-    NVM_Memory.swing = 0;
-    NVM_Memory.fan = 0;
-    NVM_Memory.mode = 0;
   }
 }
 #endif
@@ -387,46 +188,55 @@ void onHomieEvent(const HomieEvent &event)
   }
 }
 
+void mainHomieLoop(void)
+{
+  static float freq = 0;
+
+  float temp_freq = getFrequeny();
+  if (temp_freq != 0)
+  {
+    freq = temp_freq;
+  }
+
+  if (globalEnableMeasurment == true)
+  {
+    Homie.getLogger() << "Send Frequency: " << freq << endl;
+    MeasurementNode.setProperty("Rain").send(String(freq));
+    // Do measurement of Temp and humidty
+    if (doTemperaturMeasurement())
+    {
+      Homie.getLogger() << "Measurement done" << endl;
+      Homie.getLogger() << "Send Temperatur: " << t << endl;
+      Homie.getLogger() << "Send Humidity: " << h << endl;
+      MeasurementNode.setProperty("Temperatur").send(String(t));
+      MeasurementNode.setProperty("Humidity").send(String(h));
+
+      globalEnableMeasurment = false;
+    }
+    globalEnableMeasurment = false;
+  }
+}
+
 void setup()
 {
-  EEPROM_.begin(sizeof(NVM_Memory));
-  EEPROM_.get(0, NVM_Memory);
-  NVM_Memory.startup_counter++;
-  EEPROM_.put(0, NVM_Memory);
-  EEPROM_.commit();
-  EEPROM_.end();
-  memcpy(&NVM_Memory_backup, &NVM_Memory, sizeof(NVM_Memory));
+  // Rain sensor init
+  pinMode(RAIN_PIN, INPUT);
 
   Serial.begin(115200);
   Serial << endl
          << endl;
-  //Homie.disableLedFeedback();
 
+  // Homie.disableLedFeedback();
   // Start Homie
-  Homie_setFirmware("TempSensor", "0.2.0");
+  Homie_setFirmware("RainSensorCap", "0.1.0");
   Homie.setLoopFunction(mainHomieLoop);
   Homie.onEvent(onHomieEvent); // before Homie.setup()
   measurmentTimer.attach(MeasurementTimeInSeconds, enableMeasurment);
   dht.begin();
-  ac.begin();
 
   MeasurementNode.advertise("Temperatur").setName("Temp").setRetained(true).setDatatype("float");
   MeasurementNode.advertise("Humidity").setName("Humidity").setRetained(true).setDatatype("float");
-
-  KlimaNode.advertise("power").setName("Powertoggle").setRetained(true).setDatatype("boolean").settable(setPowerHandler);
-  KlimaNode.advertise("temperatur").setName("Temperatur").setRetained(true).setDatatype("integer").settable(setTempHandler);
-  KlimaNode.advertise("swing").setName("Swing").setRetained(true).setDatatype("boolean").settable(setSwingHandler);
-  KlimaNode.advertise("fan").setName("Fan").setRetained(true).setDatatype("integer").settable(setFanHandler);
-  KlimaNode.advertise("mode").setName("Mode").setRetained(true).setDatatype("integer").settable(setModeHandler);
-
-  // Setting default state for A/C.
-  // See `fujitsu_ac_remote_model_t` in `ir_Fujitsu.h` for a list of models.
-  ac.setModel(ARRAH2E);
-  ac.setSwing(NVM_Memory.swing);
-  ac.setMode(NVM_Memory.mode);
-  ac.setFanSpeed(NVM_Memory.fan);
-  ac.setTemp(NVM_Memory.temperatur);
-  ac.setCmd(NVM_Memory.power);
+  MeasurementNode.advertise("Rain").setName("Rain").setRetained(true).setDatatype("float");
 
   Homie.setup();
   ArduinoOTA.onStart([]()
@@ -447,8 +257,7 @@ void setup()
                        else if (error == OTA_RECEIVE_ERROR)
                          Serial.println("Receive Failed");
                        else if (error == OTA_END_ERROR)
-                         Serial.println("End Failed");
-                     });
+                         Serial.println("End Failed"); });
   ArduinoOTA.begin();
 }
 
@@ -460,4 +269,90 @@ void loop()
 #ifdef DEBUG_EN
   Debug.handle();
 #endif
+}
+
+/*
+Calculate frequency if rain sensor
+*/
+double getFrequeny(void)
+{                                                 // Ergebnis in Hz
+  const unsigned int MeasuringTimeout = 200000;   // 1000000 us
+  const unsigned int MeasuringCycleleCount = 1e3; // 1s @ 40khz
+
+  static double fsum = 0.0;
+  static uint16_t cycleCount = 0;
+  double f, T;
+
+  if (cycleCount < MeasuringCycleleCount)
+  {
+    T = pulseIn(RAIN_PIN, HIGH, MeasuringTimeout) + pulseIn(RAIN_PIN, LOW, MeasuringTimeout);
+    if (T != 0)
+    {
+      cycleCount++;
+      fsum += 1 / T * 1e6;
+    }
+    return 0;
+  }
+  else
+  {
+    f = fsum / cycleCount * 0.9925; // Korrekturwert ermitteln und einrechnen
+    cycleCount = 0;
+    fsum = 0;
+    return f;
+  }
+}
+
+/*
+  Enable Temperature measurement
+*/
+void enableMeasurment(void)
+{
+  globalEnableMeasurment = true;
+}
+
+/*
+Do the Temperatur measurement and calculation
+*/
+bool doTemperaturMeasurement(void)
+{
+  static int i = 0;
+  static uint32_t time = 0;
+
+  bool finished = false;
+  // Read five times all values
+  if (i == 0)
+  {
+    t = dht.readTemperature();
+    h = dht.readHumidity();
+    time = millis();
+    i++;
+  }
+  else if (i < measurementsPerInterval)
+  {
+    if ((time + 100) < millis())
+    {
+      t += dht.readTemperature();
+      h += dht.readHumidity();
+      time = millis();
+      i++;
+    }
+    else if (time > millis())
+    {
+      time = millis();
+    }
+  }
+  else if (i == measurementsPerInterval)
+  {
+    // Calculate the mean of all values
+    t = t / measurementsPerInterval + calibartion;
+    h = h / measurementsPerInterval;
+    i = 0;
+    finished = true;
+  }
+  else
+  {
+    i = 0;
+  }
+
+  return finished;
 }
